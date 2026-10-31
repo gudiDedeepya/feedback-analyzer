@@ -2,11 +2,22 @@ import os
 
 import pandas as pd
 
-MODEL = "claude-haiku-5-5"  # a small, cheap model is enough for this
+CLAUDE_MODEL = "claude-haiku-5-5"
+# Change the Gemini model without editing code: set the GEMINI_MODEL variable
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+
+
+def provider():
+    """Which LLM to use: 'claude', 'gemini' or None (fallback)."""
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        return "claude"
+    if os.environ.get("GEMINI_API_KEY"):
+        return "gemini"
+    return None
 
 
 def llm_available():
-    return bool(os.environ.get("ANTHROPIC_API_KEY"))
+    return provider() is not None
 
 
 def fallback_summary(reviews, keywords):
@@ -18,24 +29,42 @@ def fallback_summary(reviews, keywords):
     return "\n".join(lines)
 
 
-def llm_summary(reviews, keywords):
-    """Ask Claude for a 3-bullet summary of the complaints in one topic."""
-    from anthropic import Anthropic
-
-    client = Anthropic()  # reads ANTHROPIC_API_KEY from the environment
+def build_prompt(reviews, keywords):
+    """The same instructions are used for every LLM."""
     sample = "\n".join(f"- {r}" for r in reviews[:30])
-    prompt = (
+    return (
         "You are analysing customer feedback. Below are negative reviews that "
         f"belong to one topic (keywords: {', '.join(keywords)}).\n\n{sample}\n\n"
         "Write exactly 3 short bullet points summarising the main complaints. "
         "Use only what is in the reviews. Do not invent details."
     )
+
+
+def claude_summary(prompt):
+    from anthropic import Anthropic
+
+    client = Anthropic()  # reads ANTHROPIC_API_KEY from the environment
     msg = client.messages.create(
-        model=MODEL,
+        model=CLAUDE_MODEL,
         max_tokens=300,
         messages=[{"role": "user", "content": prompt}],
     )
     return msg.content[0].text.strip()
+
+
+def gemini_summary(prompt):
+    from google import genai
+
+    client = genai.Client()  # reads GEMINI_API_KEY from the environment
+    response = client.models.generate_content(model=GEMINI_MODEL, contents=prompt)
+    return response.text.strip()
+
+
+def llm_summary(reviews, keywords):
+    prompt = build_prompt(reviews, keywords)
+    if provider() == "claude":
+        return claude_summary(prompt)
+    return gemini_summary(prompt)
 
 
 def summarize_topic(df, topic, keywords):
@@ -46,7 +75,7 @@ def summarize_topic(df, topic, keywords):
     if llm_available():
         try:
             return llm_summary(negatives, keywords)
-        except Exception as e:  # network, key or quota problem: do not crash the app
+        except Exception as e:  # network, key, quota or model problem: do not crash the app
             return fallback_summary(negatives, keywords) + f"\n(LLM unavailable: {type(e).__name__})"
     return fallback_summary(negatives, keywords)
 
@@ -61,7 +90,7 @@ if __name__ == "__main__":
     df = analyze("data/sample_reviews.csv")
     df, kws = find_topics(df, n_topics=n_topics)
     summary = topic_summary(df, kws)
-    print("LLM mode:", "ON" if llm_available() else "OFF (using fallback)")
+    print("LLM provider:", provider() or "none (using fallback)")
     for t in summary["topic"]:
         print(f"\n=== Topic {t}: {', '.join(kws[t])} ===")
         print(summarize_topic(df, t, kws[t]))
