@@ -62,7 +62,9 @@ def add_sentiment(df, use_custom=True):
 
 
 def rating_to_label(rating):
-    """1-2 stars = negative, 3 = neutral, 4-5 = positive."""
+    """1-2 stars = negative, 3 = neutral, 4-5 = positive. Invalid rating -> None."""
+    if pd.isna(rating) or rating < 1 or rating > 5:
+        return None
     if rating <= 2:
         return "negative"
     if rating == 3:
@@ -71,8 +73,16 @@ def rating_to_label(rating):
 
 
 def accuracy_vs_rating(df):
-    """Share of reviews where predicted sentiment matches the star rating."""
-    return (df["sentiment"] == df["rating"].apply(rating_to_label)).mean()
+    """Share of reviews where predicted sentiment matches the star rating.
+    Rows with a missing or invalid rating are skipped."""
+    if "rating" not in df.columns:
+        return None
+    ratings = pd.to_numeric(df["rating"], errors="coerce")
+    true_labels = ratings.apply(rating_to_label)
+    valid = true_labels.notna()
+    if not valid.any():
+        return None
+    return (df.loc[valid, "sentiment"] == true_labels[valid]).mean()
 
 
 def analyze(path, use_custom=True):
