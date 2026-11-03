@@ -12,6 +12,15 @@ CUSTOM_WORDS = {
     "transferred": -1.0, "surprise": -1.0, "apart": -1.5, "cheap": -1.5,
     "missing": -1.5,
 }
+# Words found using the dev set only (real reviews)
+REAL_DATA_WORDS = {
+    "unflattering": -2.0, "shapeless": -1.8, "sack": -1.5, "tent": -1.2,
+    "stiff": -1.2, "boxy": -0.8, "hole": -1.5, "maternity": -1.0,
+    "returned": -1.2, "returning": -1.2,
+    "strange": -1.5, "awkward": -1.5,   # raised: VADER scores these too weakly
+    "huge": -1.0, "hopes": -0.8,        # flipped: VADER scores these as positive
+}
+CUSTOM_WORDS.update(REAL_DATA_WORDS)
 
 
 def load_reviews(path):
