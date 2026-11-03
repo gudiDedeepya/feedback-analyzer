@@ -36,20 +36,22 @@ On 300 template-generated reviews, adding complaint words to VADER raised agreem
 - **Dev sanity check (against star ratings):** 1-2 star reviews flagged negative rose from 26.9% to 38.1%, while 4-5 star reviews flagged negative stayed low (1.9% to 2.3%).
 - **Test sample:** 100 test reviews labelled by me (50 negative, 11 neutral, 39 positive), sampled to include enough complaints. The words were frozen before I ran this evaluation, and I ran it once.
 
-| Metric (100 labelled test reviews) | Plain VADER | VADER + custom words |
-|---|---|---|
-| Negative precision | 0.92 | 0.95 |
-| Negative recall | 0.24 | 0.40 |
-| Negative F1 | 0.38 | 0.56 |
-| Positive recall | 0.97 | 0.97 |
-| Neutral recall | 0.00 | 0.00 |
-| Accuracy | 0.50 | 0.58 |
+| Metric (100 labelled test reviews) | Plain VADER | VADER + custom words | TF-IDF + logistic regression |
+|---|---|---|---|
+| Negative precision | 0.92 | 0.95 | 0.82 |
+| Negative recall | 0.24 | 0.40 | 0.54 |
+| Negative F1 | 0.38 | 0.56 | 0.65 |
+| Accuracy | 0.50 | 0.58 | 0.61 |
 
 ### Findings
 - The custom words found 8 more of the 50 real complaints (12 to 20) with almost no extra false alarms, a real but modest gain.
 - **Most complaints are still missed (60%).** Real reviews mix praise and criticism ("a beautiful dress, but the fit is strange"), and a word-list approach adds the positive and negative words together, so the praise often wins.
 - **Accuracy alone is misleading.** About 77% of reviews are 4-5 stars, so predicting "positive" for everything scores about 77% against star ratings. VADER scored 0.779 and the custom version 0.787 on the full test set, barely above that trivial baseline, so I use precision and recall on the negative class instead.
 - VADER never predicted "neutral" on these long reviews.
+- The trained model (TF-IDF with word pairs + logistic regression, trained on star-derived labels from the dev set only) found 27 of the 50 complaints, vs 20 for custom VADER and 12 for plain VADER, at the cost of more false alarms (precision 0.82 vs 0.95).
+- With 50 complaints in the sample, the improvement over plain VADER is clear, but the gap between the trained model and custom VADER is within the margin of error (about ±13 points).
+- Inspecting the model's coefficients showed it rediscovered many hand-picked complaint words ("unflattering", "returned", "cheap") and learned phrases a word list cannot ("not recommend"), but also picked up stylistic artifacts ("was", "were").
+- Neutral reviews are still poorly classified by all methods (only 11 examples).
 
 ## Limitations
 - The labelled sample is small (100 reviews, only 11 neutral), so the metrics are noisy.
@@ -107,7 +109,7 @@ Python, pandas, scikit-learn (TF-IDF, NMF, metrics), VADER, Streamlit, Plotly, G
 - `find_missed_complaints.py`, `check_dev.py`: finding and sanity-checking custom words on the dev set
 
 ## Possible improvements
-- Train a supervised model (TF-IDF + logistic regression, or a fine-tuned transformer) and compare it against VADER on the same labelled test sample
+
 - Handle mixed reviews, for example by scoring sentences separately or allowing multiple topics per review
 - Label a larger sample with more than one annotator and report agreement
 - Pick the number of topics with a coherence score, and tune topics on the real dataset

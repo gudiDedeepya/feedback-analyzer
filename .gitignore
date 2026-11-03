@@ -6,3 +6,4 @@ data/raw/
 data/dev.csv
 data/test.csv
 data/test_label_sheet.csv
+models/
