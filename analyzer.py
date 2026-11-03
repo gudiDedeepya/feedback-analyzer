@@ -1,6 +1,8 @@
 import re
+from pathlib import Path
 
 import pandas as pd
+import joblib
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
 # NEW: complaint words VADER does not treat as negative.
@@ -40,6 +42,7 @@ def clean_for_topics(text):
     """Simplified text for topic modeling: lowercase, no links, letters only."""
     text = text.lower()
     text = re.sub(r"http\S+|www\.\S+", " ", text)
+    text = re.sub(r"[’']", "", text)          # join contractions: didn't -> didnt
     text = re.sub(r"[^a-z\s]", " ", text)
     return re.sub(r"\s+", " ", text).strip()
 
@@ -70,6 +73,24 @@ def add_sentiment(df, use_custom=True):
     return df
 
 
+def model_available(model_path="models/sentiment_lr.joblib"):
+    """Return whether the saved trained sentiment model exists."""
+    return Path(model_path).is_file()
+
+
+def add_sentiment_model(df, model_path="models/sentiment_lr.joblib"):
+    """Predict sentiment labels and positive-minus-negative scores with the saved model."""
+    model = joblib.load(model_path)
+    df = df.copy()
+    df["sentiment"] = model.predict(df["review"])
+
+    probabilities = model.predict_proba(df["review"])
+    positive_index = list(model.classes_).index("positive")
+    negative_index = list(model.classes_).index("negative")
+    df["sentiment_score"] = probabilities[:, positive_index] - probabilities[:, negative_index]
+    return df
+
+
 def rating_to_label(rating):
     """1-2 stars = negative, 3 = neutral, 4-5 = positive. Invalid rating -> None."""
     if pd.isna(rating) or rating < 1 or rating > 5:
@@ -94,10 +115,13 @@ def accuracy_vs_rating(df):
     return (df.loc[valid, "sentiment"] == true_labels[valid]).mean()
 
 
-def analyze(path, use_custom=True):
+def analyze(path, use_custom=True, method="vader"):
     df = load_reviews(path)
     df["clean"] = df["review"].apply(clean_for_topics)
-    df = add_sentiment(df, use_custom=use_custom)
+    if method == "trained":
+        df = add_sentiment_model(df)
+    else:
+        df = add_sentiment(df, use_custom=use_custom)
     return df
 
 
